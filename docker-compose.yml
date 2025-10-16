@@ -1,0 +1,17 @@
+services:
+  localstack:
+    image: localstack/localstack:stable
+    container_name: localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3,dynamodb
+      - DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - LS_LOG=warning
+    volumes:
+      - "./.localstack:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
