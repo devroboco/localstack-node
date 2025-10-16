@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>LocalStack Demo — S3 & DynamoDB</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 900px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      h2 {
+        margin-top: 32px;
+      }
+      fieldset {
+        margin: 16px 0;
+      }
+      label {
+        display: block;
+        margin: 8px 0 4px;
+      }
+      input,
+      button {
+        padding: 8px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+      th {
+        background: #f3f3f3;
+      }
+      code {
+        background: #f6f8fa;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LocalStack Demo</h1>
+
+    <h2>1) Autenticação (DynamoDB)</h2>
+    <fieldset>
+      <legend>Cadastro</legend>
+      <label>Nome</label>
+      <input id="name" placeholder="Seu nome" />
+      <label>Email</label>
+      <input id="email" placeholder="voce@exemplo.com" />
+      <label>Senha</label>
+      <input id="password" type="password" placeholder="********" />
+      <div class="row">
+        <button id="btnSignup">Cadastrar</button>
+      </div>
+      <p id="signupMsg"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Login</legend>
+      <label>Email</label>
+      <input id="loginEmail" placeholder="voce@exemplo.com" />
+      <label>Senha</label>
+      <input id="loginPassword" type="password" placeholder="********" />
+      <div class="row">
+        <button id="btnLogin">Entrar</button>
+        <span>Token: <code id="token">(não autenticado)</code></span>
+      </div>
+      <p id="loginMsg"></p>
+    </fieldset>
+
+    <h2>2) Upload / Download (S3)</h2>
+    <fieldset>
+      <legend>Upload</legend>
+      <input id="fileInput" type="file" />
+      <button id="btnUpload">Enviar</button>
+      <p id="uploadMsg"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Arquivos no Bucket</legend>
+      <button id="btnList">Listar</button>
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Tamanho</th>
+            <th>Última Modificação</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="filesBody"></tbody>
+      </table>
+    </fieldset>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let authToken = null;
+
+      $("btnSignup").onclick = async () => {
+        const name = $("name").value.trim();
+        const email = $("email").value.trim();
+        const password = $("password").value;
+        $("signupMsg").textContent = "Cadastrando...";
+        const r = await fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        });
+        const j = await r.json();
+        $("signupMsg").textContent = j.ok
+          ? "Usuário criado!"
+          : j.error || "Erro";
+      };
+
+      $("btnLogin").onclick = async () => {
+        const email = $("loginEmail").value.trim();
+        const password = $("loginPassword").value;
+        $("loginMsg").textContent = "Entrando...";
+        const r = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const j = await r.json();
+        if (j.ok) {
+          authToken = j.token;
+          $("token").textContent = j.token.slice(0, 16) + "...";
+          $("loginMsg").textContent = `Bem-vindo, ${
+            j.user?.name || j.user?.email
+          }!`;
+        } else {
+          $("loginMsg").textContent = j.error || "Erro";
+        }
+      };
+
+      $("btnUpload").onclick = async () => {
+        const file = $("fileInput").files[0];
+        if (!file) return ($("uploadMsg").textContent = "Escolha um arquivo");
+        $("uploadMsg").textContent = "Enviando...";
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch("/api/upload", { method: "POST", body: fd });
+        const j = await r.json();
+        $("uploadMsg").textContent = j.ok
+          ? `Enviado! key=${j.key}`
+          : j.error || "Erro";
+      };
+
+      $("btnList").onclick = async () => {
+        const r = await fetch("/api/files");
+        const j = await r.json();
+        const body = $("filesBody");
+        body.innerHTML = "";
+        if (!j.ok) {
+          body.innerHTML = `<tr><td colspan="4">Erro ao listar</td></tr>`;
+          return;
+        }
+        j.items.forEach((it) => {
+          const tr = document.createElement("tr");
+          const tdKey = document.createElement("td");
+          tdKey.textContent = it.key;
+          const tdSize = document.createElement("td");
+          tdSize.textContent = it.size;
+          const tdLM = document.createElement("td");
+          tdLM.textContent = new Date(it.lastModified).toLocaleString();
+          const tdActions = document.createElement("td");
+          const a = document.createElement("a");
+          a.href = `/api/download/${encodeURIComponent(it.key)}`;
+          a.textContent = "Download";
+          tdActions.appendChild(a);
+
+          tr.appendChild(tdKey);
+          tr.appendChild(tdSize);
+          tr.appendChild(tdLM);
+          tr.appendChild(tdActions);
+          body.appendChild(tr);
+        });
+      };
+    </script>
+  </body>
+</html>
